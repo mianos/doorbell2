@@ -6,6 +6,7 @@
 #include <memory>
 
 #include "AudioTools.h"
+#include "provision.h"
 
 #include "mqtt.h"
 
@@ -39,8 +40,7 @@ void RadarMqtt::callback(char* topic_str, byte* payload, unsigned int length) {
     auto dest = splitter.getItemAtIndex(itemCount - 1);
     if (dest == "reprovision") {
         Serial.printf("clearing provisioning\n");
-        wifi_prov_mgr_reset_provisioning();
-        ESP.restart();
+        reset_provisioning();
     } else if (dest == "play") {
       if (jpl.containsKey("url")) {
         auto url = jpl["url"].as<String>();

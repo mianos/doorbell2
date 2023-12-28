@@ -57,6 +57,10 @@ void SysProvEvent(arduino_event_t *sys_event)
     }
 }
 
+void        reset_provisioning() {
+    wifi_prov_mgr_reset_provisioning();
+    ESP.restart();
+}
 
 #if defined(BOOT_BUTTON)
 constexpr int PROG_BUTTON_PIN = BOOT_BUTTON;
