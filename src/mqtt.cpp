@@ -37,14 +37,16 @@ void RadarMqtt::callback(char* topic_str, byte* payload, unsigned int length) {
     String output;
     serializeJson(jpl, output);
     auto dest = splitter.getItemAtIndex(itemCount - 1);
-#if 0
-    if (dest == "tracking") {
-      if (jpl.containsKey("interval")) {
-        settings->tracking = jpl["interval"].as<int>();
-        Serial.printf("Setting tracking interval to %d\n", settings->tracking);
+    if (dest == "play") {
+      if (jpl.containsKey("url")) {
+        auto url = jpl["url"].as<String>();
+        Serial.printf("playing '%s'\n", url.c_str());
+        auto url_streamer = copier->getFrom();
+        auto urlStream = static_cast<URLStream*>(url_streamer);
+
+        urlStream->begin(url.c_str());
       }
     }
-#endif
   }
 }
 
@@ -78,6 +80,7 @@ bool RadarMqtt::reconnect() {
     return true;
   } else {
     Serial.printf("failed to connect to %s port %d state %d\n", server.c_str(), port, client.state());
+    delay(1000);
     return false;
   }
 }

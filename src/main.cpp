@@ -6,7 +6,8 @@
 
 WiFiClient wifiClient;
 
-URLStream url("", "");
+URLStream url_streamer("", "");
+
 I2SStream i2s;
 MP3DecoderHelix decoder;
 EncodedAudioStream dec(&i2s, new MP3DecoderHelix()); // Decoding stream
@@ -18,7 +19,7 @@ std::unique_ptr<RadarMqtt> mqtt;
 void setup() {
   Serial.begin(115200);
   wifi_connect();
-  url.setClient(wifiClient);
+  url_streamer.setClient(wifiClient);
   AudioLogger::instance().begin(Serial, AudioLogger::Error);
 
 // pinMode(nextButtonPin, INPUT_PULLUP);
@@ -37,13 +38,12 @@ void setup() {
 #endif
   i2s.begin(cfg);
 
-  copier = std::make_unique<StreamCopy>(dec, url);
+  copier = std::make_unique<StreamCopy>(dec, url_streamer);
   // setup player
   dec.setNotifyAudioChange(i2s);
   dec.begin();
 
-  //url.begin("http://stream.srg-ssr.ch/m/rsj/mp3_128","audio/mp3");
-  url.begin("http://mqtt2.mianos.com/bowl.mp3");
+  //url_streamer.begin("http://stream.srg-ssr.ch/m/rsj/mp3_128","audio/mp3");
 
   mqtt = std::make_unique<RadarMqtt>(std::move(copier));
 }
@@ -57,16 +57,6 @@ void updateVolume() {
   player.setVolume(vol/4095.0);
 }
 
-
-// Moves to the next url when we touch the pin
-void updatePosition() {
-   if (digitalRead(nextButtonPin) == LOW) {
-      Serial.println("Moving to next url");
-      if (nextButtonDebouncer.debounce()){
-        player.next();
-      }
-  }
-}
 #endif
 
 void loop() {
