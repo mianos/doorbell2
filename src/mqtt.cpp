@@ -49,7 +49,7 @@ void RadarMqtt::callback(char* topic_str, byte* payload, unsigned int length) {
 }
 
 
-RadarMqtt::RadarMqtt(std::unique_ptr<AudioPlayer> player, const String& server, int port) : server(server), port(port), client(espClient),  player(std::move(player)) {
+RadarMqtt::RadarMqtt(std::unique_ptr<StreamCopy> copier, const String& server, int port) : server(server), port(port), client(espClient),  copier(std::move(copier)) {
   client.setServer(server.c_str(), port);
   Serial.printf("init mqtt, server '%s'\n", server.c_str());
   client.setCallback([this](char* topic_str, byte* payload, unsigned int length) {
@@ -89,5 +89,5 @@ void RadarMqtt::handle() {
     }
   }
   client.loop();
-  player->copy();
+  copier->copy();
 }

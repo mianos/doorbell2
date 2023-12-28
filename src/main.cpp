@@ -4,35 +4,21 @@
 #include "provision.h"
 #include "mqtt.h"
 
-const char *urls[] = {
-  "http://stream.srg-ssr.ch/m/rsj/mp3_128",
-  "http://stream.srg-ssr.ch/m/drs3/mp3_128",
-  "http://stream.srg-ssr.ch/m/rr/mp3_128",
-  "http://sunshineradio.ice.infomaniak.ch/sunshineradio-128.mp3",
-  "http://streaming.swisstxt.ch/m/drsvirus/mp3_128"
-};
-const char *wifi = "iot";
-const char *password = "iotlongpassword";
-
 WiFiClient wifiClient;
-// URLStream urlStream(wifi, password);
-URLStream urlStream("", "");
-AudioSourceURL source(urlStream, urls, "audio/mp3");
+
+URLStream url("", "");
 I2SStream i2s;
 MP3DecoderHelix decoder;
+EncodedAudioStream dec(&i2s, new MP3DecoderHelix()); // Decoding stream
 
-std::unique_ptr<AudioPlayer> player;
+std::unique_ptr<StreamCopy> copier;
 std::unique_ptr<RadarMqtt> mqtt;
 
-// additional controls
-const int volumePin = A0;
-Debouncer nextButtonDebouncer(2000);
-const int nextButtonPin = 0;
 
 void setup() {
   Serial.begin(115200);
   wifi_connect();
-  urlStream.setClient(wifiClient);
+  url.setClient(wifiClient);
   AudioLogger::instance().begin(Serial, AudioLogger::Error);
 
 // pinMode(nextButtonPin, INPUT_PULLUP);
@@ -51,10 +37,15 @@ void setup() {
 #endif
   i2s.begin(cfg);
 
-  player = std::make_unique<AudioPlayer>(source, i2s, decoder);
+  copier = std::make_unique<StreamCopy>(dec, url);
   // setup player
-  player->begin();
-  mqtt = std::make_unique<RadarMqtt>(std::move(player));
+  dec.setNotifyAudioChange(i2s);
+  dec.begin();
+
+  //url.begin("http://stream.srg-ssr.ch/m/rsj/mp3_128","audio/mp3");
+  url.begin("http://mqtt2.mianos.com/bowl.mp3");
+
+  mqtt = std::make_unique<RadarMqtt>(std::move(copier));
 }
 
 #if 0
