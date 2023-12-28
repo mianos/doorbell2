@@ -1,15 +1,8 @@
-/**
- * @file player-url-i2s.ino
- * @brief see https://github.com/pschatzmann/arduino-audio-tools/blob/main/examples/examples-player/player-url-i2s/README.md
- * 
- * @author Phil Schatzmann
- * @copyright GPLv3
- */
-
-
 #include "AudioTools.h"
 #include "AudioCodecs/CodecMP3Helix.h"
+
 #include "provision.h"
+#include "mqtt.h"
 
 const char *urls[] = {
   "http://stream.srg-ssr.ch/m/rsj/mp3_128",
@@ -27,7 +20,9 @@ URLStream urlStream("", "");
 AudioSourceURL source(urlStream, urls, "audio/mp3");
 I2SStream i2s;
 MP3DecoderHelix decoder;
-AudioPlayer player(source, i2s, decoder);
+
+std::unique_ptr<AudioPlayer> player;
+std::unique_ptr<RadarMqtt> mqtt;
 
 // additional controls
 const int volumePin = A0;
@@ -56,10 +51,13 @@ void setup() {
 #endif
   i2s.begin(cfg);
 
+  player = std::make_unique<AudioPlayer>(source, i2s, decoder);
   // setup player
-  player.begin();
+  player->begin();
+  mqtt = std::make_unique<RadarMqtt>(std::move(player));
 }
 
+#if 0
 // Sets the volume control from a linear potentiometer input
 void updateVolume() {
   // Reading potentiometer value (range is 0 - 4095)
@@ -78,10 +76,11 @@ void updatePosition() {
       }
   }
 }
-
+#endif
 
 void loop() {
   //updateVolume(); // remove comments to activate volume control
   // updatePosition();  // remove comments to activate position control
-  player.copy();
+  //player.copy();
+  mqtt->handle();
 }

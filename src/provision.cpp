@@ -73,7 +73,7 @@ String getMacAddress() {
   return String(macStr);
 }
 
-void wifi_connect() {
+void wifi_connect(const char *pname) {
   WiFi.mode(WIFI_STA);
   WiFi.onEvent(SysProvEvent);
   WiFi.disconnect();  // Disconnect from the WiFi
