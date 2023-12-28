@@ -37,7 +37,11 @@ void RadarMqtt::callback(char* topic_str, byte* payload, unsigned int length) {
     String output;
     serializeJson(jpl, output);
     auto dest = splitter.getItemAtIndex(itemCount - 1);
-    if (dest == "play") {
+    if (dest == "reprovision") {
+        Serial.printf("clearing provisioning\n");
+        wifi_prov_mgr_reset_provisioning();
+        ESP.restart();
+    } else if (dest == "play") {
       if (jpl.containsKey("url")) {
         auto url = jpl["url"].as<String>();
         Serial.printf("playing '%s'\n", url.c_str());
@@ -51,9 +55,9 @@ void RadarMqtt::callback(char* topic_str, byte* payload, unsigned int length) {
 }
 
 
-RadarMqtt::RadarMqtt(std::unique_ptr<StreamCopy> copier, const String& server, int port) : server(server), port(port), client(espClient),  copier(std::move(copier)) {
-  client.setServer(server.c_str(), port);
-  Serial.printf("init mqtt, server '%s'\n", server.c_str());
+RadarMqtt::RadarMqtt(std::unique_ptr<StreamCopy> copier, const char *server, int port) : server(server), port(port), client(espClient),  copier(std::move(copier)) {
+  client.setServer(server, port);
+  Serial.printf("init mqtt, server '%s'\n", server);
   client.setCallback([this](char* topic_str, byte* payload, unsigned int length) {
     callback(topic_str, payload, length);
   });
@@ -61,16 +65,17 @@ RadarMqtt::RadarMqtt(std::unique_ptr<StreamCopy> copier, const String& server, i
 
 
 bool RadarMqtt::reconnect() {
-  String clientId = name + '-' + String(random(0xffff), HEX);
-  Serial.printf("Attempting MQTT connection... to %s name %s\n", server.c_str(), clientId.c_str());
+  String clientId =  WiFi.getHostname(); // name + '-' + String(random(0xffff), HEX);
+  Serial.printf("Attempting MQTT connection... to %s name %s\n", server, clientId.c_str());
   if (client.connect(clientId.c_str())) {
+    delay(2000);
     String cmnd_topic = String("cmnd/") + name + "/#";
     client.subscribe(cmnd_topic.c_str());
     Serial.printf("mqtt connected\n");
 
     StaticJsonDocument<200> doc;
     doc["version"] = 1;
-    doc["time"] = DateTime.toISOString();
+//    doc["time"] = DateTime.toISOString();
     doc["hostname"] = WiFi.getHostname();
     doc["ip"] = WiFi.localIP().toString();
     String status_topic = "tele/" + name + "/init";
@@ -79,8 +84,8 @@ bool RadarMqtt::reconnect() {
     client.publish(status_topic.c_str(), output.c_str());
     return true;
   } else {
-    Serial.printf("failed to connect to %s port %d state %d\n", server.c_str(), port, client.state());
-    delay(1000);
+    Serial.printf("failed to connect to %s port %d state %d\n", server, port, client.state());
+    delay(10000);
     return false;
   }
 }

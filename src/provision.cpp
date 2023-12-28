@@ -5,44 +5,42 @@ int prov_on_flag = 0;
 int prov_end = 0;
 int prov_err = 0;
 
+
 void SysProvEvent(arduino_event_t *sys_event)
 {
     switch (sys_event->event_id) {
     case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-        Serial.print("\nConnected IP address : ");
-        Serial.println(IPAddress(sys_event->event_info.got_ip.ip_info.ip.addr));
+        printf("\nConnected IP address : %s\n", IPAddress(sys_event->event_info.got_ip.ip_info.ip.addr).toString().c_str());
         break;
     case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-        Serial.println("\nWHAT?  Disconnected. Connecting to the AP again... ");
+        printf("\nWHAT?  Disconnected. Connecting to the AP again...\n");
         break;
     case ARDUINO_EVENT_PROV_START:
-        Serial.println("\nProvisioning started\nGive Credentials of your access point using \" Android app \"");
+        printf("\nProvisioning started\nGive Credentials of your access point using \" Android app \"\n");
         break;
-    case ARDUINO_EVENT_PROV_CRED_RECV: 
-        Serial.println("\nReceived Wi-Fi credentials");
-        Serial.print("\tSSID : ");
-        Serial.println((const char *) sys_event->event_info.prov_cred_recv.ssid);
-        Serial.print("\tPassword : ");
-        Serial.println((char const *) sys_event->event_info.prov_cred_recv.password);
+    case ARDUINO_EVENT_PROV_CRED_RECV:
+        printf("\nReceived Wi-Fi credentials\n");
+        printf("\tSSID : %s\n", (const char *)sys_event->event_info.prov_cred_recv.ssid);
+        printf("\tPassword : %s\n", (const char *)sys_event->event_info.prov_cred_recv.password);
         break;
-    case ARDUINO_EVENT_PROV_CRED_FAIL: 
-        Serial.println("\nProvisioning failed!\nPlease reset to factory and retry provisioning\n");
-        if(sys_event->event_info.prov_fail_reason == WIFI_PROV_STA_AUTH_ERROR) 
-            Serial.println("\nWi-Fi AP password incorrect");
+    case ARDUINO_EVENT_PROV_CRED_FAIL:
+        printf("\nProvisioning failed!\nPlease reset to factory and retry provisioning\n");
+        if(sys_event->event_info.prov_fail_reason == WIFI_PROV_STA_AUTH_ERROR)
+            printf("\nWi-Fi AP password incorrect\n");
         else
-            Serial.println("\nWi-Fi AP not found....Add API \" nvs_flash_erase() \" before beginProvision()");        
+            printf("\nWi-Fi AP not found....Add API \" nvs_flash_erase() \" before beginProvision()\n");
         break;
     case ARDUINO_EVENT_PROV_CRED_SUCCESS:
-        Serial.println("\nProvisioning Successful");
+        printf("\nProvisioning Successful\n");
         break;
     case ARDUINO_EVENT_PROV_END:
-        Serial.println("\nProvisioning Ends");
+        printf("\nProvisioning Ends\n");
         break;
     case ARDUINO_EVENT_PROV_INIT:
-        Serial.printf("Prov: Init\n");
+        printf("Prov: Init\n");
         break;
     case ARDUINO_EVENT_PROV_DEINIT:
-        Serial.printf("Prov: Stopped\n");
+        printf("Prov: Stopped\n");
         break;
     case ARDUINO_EVENT_WIFI_SCAN_DONE:
         printf("Prov: scan done\n");
@@ -54,10 +52,11 @@ void SysProvEvent(arduino_event_t *sys_event)
         printf("Station connected\n");
         break;
     default:
-        Serial.printf("Some other event %d\n", sys_event->event_id);
+        printf("Some other event %d\n", sys_event->event_id);
         break;
     }
 }
+
 
 #if defined(BOOT_BUTTON)
 constexpr int PROG_BUTTON_PIN = BOOT_BUTTON;
