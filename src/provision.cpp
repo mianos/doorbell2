@@ -1,5 +1,5 @@
-#include "WiFiProv.h"
-#include "WiFi.h"
+#include <WiFiProv.h>
+#include <WiFi.h>
 
 int prov_on_flag = 0;
 int prov_end = 0;
@@ -62,11 +62,6 @@ void        reset_provisioning() {
     ESP.restart();
 }
 
-#if defined(BOOT_BUTTON)
-constexpr int PROG_BUTTON_PIN = BOOT_BUTTON;
-#else
-constexpr int PROG_BUTTON_PIN = 0; // GPIO0
-#endif
 
 String getMacAddress() {
   uint8_t mac[6];
@@ -85,23 +80,14 @@ void wifi_connect(const char *pname) {
   name += String(random(0xffff), HEX);
   printf("prov name: %s\n",name.c_str());
 
-  Serial.printf("press and hold prog now to reset .... \n");
-  delay(1000);
-/*  if (digitalRead(PROG_BUTTON_PIN) == LOW) {
-    Serial.printf("Reset button low Resetting\n");
-    WiFi.disconnect(false,true); 
-    delay(500);
-    ESP.restart();
-  } */
-  Serial.printf("Begin Provisioning using Soft AP\n");
-  const char * pop = "abcd1234"; 
-  const char * service_name = "PROV_PWM";
-  const char * service_key = NULL; 
 
-  WiFiProv.beginProvision(WIFI_PROV_SCHEME_SOFTAP, WIFI_PROV_SCHEME_HANDLER_NONE, WIFI_PROV_SECURITY_1, pop, service_name);
+  Serial.printf("Begin Provisioning using Soft AP\n");
+  const char * pop = "bongcloud"; 
+
+  WiFiProv.beginProvision(WIFI_PROV_SCHEME_SOFTAP, WIFI_PROV_SCHEME_HANDLER_NONE, WIFI_PROV_SECURITY_1, pop, pname);
   while (WiFi.status() != WL_CONNECTED) {
     Serial.printf("Connecting to WiFi...\n");
     delay(2000);
   }
-  Serial.printf("COnnected\n");
+  Serial.printf("Connected\n");
 }
