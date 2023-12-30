@@ -3,6 +3,8 @@
 
 #include "provision.h"
 #include "mqtt.h"
+#include "lep.h"
+#include "ld2450.h"
 
 WiFiClient wifiClient;
 
@@ -13,7 +15,9 @@ MP3DecoderHelix decoder;
 EncodedAudioStream dec(&i2s, new MP3DecoderHelix()); // Decoding stream
 
 std::unique_ptr<StreamCopy> copier;
-std::unique_ptr<RadarMqtt> mqtt;
+std::shared_ptr<RadarMqtt> mqtt;
+std::shared_ptr<SettingsManager> settings;
+RadarSensor *radarSensor;
 
 
 void setup() {
@@ -21,16 +25,11 @@ void setup() {
   wifi_connect();
   url_streamer.setClient(wifiClient);
   AudioLogger::instance().begin(Serial, AudioLogger::Error);
-
-// pinMode(nextButtonPin, INPUT_PULLUP);
-
-  // setup output
   auto cfg = i2s.defaultConfig(TX_MODE);
 #if defined(SEEED)
   cfg.pin_data = D2;
   cfg.pin_bck = D1;
   cfg.pin_ws = D0;
-
 #else
   cfg.pin_data = 27;
   cfg.pin_bck = 26;
@@ -43,9 +42,10 @@ void setup() {
   dec.setNotifyAudioChange(i2s);
   dec.begin();
 
-  //url_streamer.begin("http://stream.srg-ssr.ch/m/rsj/mp3_128","audio/mp3");
-
-  mqtt = std::make_unique<RadarMqtt>(std::move(copier));
+  settings = std::make_shared<SettingsManager>();
+  mqtt = std::make_shared<RadarMqtt>(std::move(copier), settings);
+  auto *lep = new LocalEP{mqtt, settings};
+  radarSensor = new LD2450{lep, settings};
 }
 
 #if 0
@@ -61,7 +61,6 @@ void updateVolume() {
 
 void loop() {
   //updateVolume(); // remove comments to activate volume control
-  // updatePosition();  // remove comments to activate position control
-  //player.copy();
   mqtt->handle();
+  radarSensor->process();
 }
