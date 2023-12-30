@@ -32,34 +32,33 @@ struct SettingsManager {
         if (doc.containsKey("mqtt_server")) {
             mqttServer = doc["mqtt_server"].as<String>();
         } else {
-            Serial.println("mqtt_server not found in config. Using default.");
+            Serial.printf("mqtt_server not found in config. Using default: %s\n", mqttServer.c_str());
         }
 
         if (doc.containsKey("mqtt_port")) {
             mqttPort = doc["mqtt_port"].as<int>();
         } else {
-            Serial.println("mqtt_port not found in config. Using default.");
+            Serial.printf("mqtt_port not found in config. Using default: %d\n", mqttPort);
         }
 
         if (doc.containsKey("sensor_name")) {
             sensorName = doc["sensor_name"].as<String>();
         } else {
-            Serial.println("sensor_name not found in config. Using default.");
+            Serial.printf("sensor_name not found in config. Using default: %s\n", sensorName.c_str());
         }
 
         if (doc.containsKey("tracking")) {
             tracking = doc["tracking"].as<bool>();  // Assuming tracking is a boolean
         } else {
-            Serial.println("tracking not found in config. Using default.");
+            Serial.printf("tracking not found in config. Using default: %s\n", tracking ? "true" : "false");
         }
 
         if (doc.containsKey("detection_timeout")) {
             detectionTimeout = doc["detection_timeout"].as<int>();
         } else {
-            Serial.println("detection_timeout not found in config. Using default.");
+            Serial.printf("detection_timeout not found in config. Using default: %d\n", detectionTimeout);
         }
 
         configFile.close();
     }
 };
-
