@@ -1,3 +1,4 @@
+#include <ESPDateTime.h>
 #include "AudioTools.h"
 #include "AudioCodecs/CodecMP3Helix.h"
 
@@ -43,6 +44,12 @@ void setup() {
   dec.begin();
 
   settings = std::make_shared<SettingsManager>();
+  DateTime.setTimeZone(settings->tz.c_str());
+  DateTime.begin(/* timeout param */);
+  if (!DateTime.isTimeValid()) {
+    Serial.printf("Failed to get time from server\n");
+  }
+
   mqtt = std::make_shared<RadarMqtt>(std::move(copier), settings);
   auto *lep = new LocalEP{mqtt, settings};
   radarSensor = new LD2450{lep, settings};

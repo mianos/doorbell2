@@ -100,3 +100,30 @@ void RadarMqtt::handle() {
   client.loop();
   copier->copy();
 }
+
+
+void RadarMqtt::mqtt_update_presence(bool entry, const Value *vv) {
+  StaticJsonDocument<300> doc;
+  doc["entry"] = entry;
+  doc["time"] = DateTime.toISOString();
+  if (entry) {
+    vv->toJson(doc);
+  }
+  String status_topic = "tele/" + settings->sensorName + "/presence";
+  String output;
+  serializeJson(doc, output);
+  Serial.printf("sending '%s' to '%s'\n", output.c_str(), status_topic.c_str());
+  client.publish(status_topic.c_str(), output.c_str());
+}
+
+void RadarMqtt::mqtt_track(const Value *vv) {
+  StaticJsonDocument<300> doc;
+  doc["time"] = DateTime.toISOString();
+  vv->toJson(doc);
+  String status_topic = "tele/" + settings->sensorName + "/tracking";
+  String output;
+  serializeJson(doc, output);
+  Serial.printf("sending '%s' to '%s'\n", output.c_str(), status_topic.c_str());
+  client.publish(status_topic.c_str(), output.c_str());
+}
+

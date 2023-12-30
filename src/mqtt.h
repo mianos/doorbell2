@@ -23,7 +23,7 @@ struct RadarMqtt {
   bool reconnect();
   void handle();
 
-  void mqtt_update_presence(bool entry, const Value *vv=nullptr) {};
-  void mqtt_track(const Value *vv) {};
+  void mqtt_update_presence(bool entry, const Value *vv=nullptr);
+  void mqtt_track(const Value *vv);
 };
 
