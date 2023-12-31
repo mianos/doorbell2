@@ -13,12 +13,15 @@ struct RadarMqtt {
   PubSubClient client;
   std::unique_ptr<StreamCopy> copier;
   std::shared_ptr<SettingsManager> settings;
+  EncodedAudioStream& to;
+  URLStream& from;
+  VolumeStream& volume;
 
   unsigned long lastTimeCalled = 0;  // Store the last time the function was called
   const unsigned long interval = 250;  // Interval in milliseconds (1000 ms / 4 = 250 ms)
 
   void callback(char* topic_str, byte* payload, unsigned int length);
-  RadarMqtt(std::unique_ptr<StreamCopy> copier, std::shared_ptr<SettingsManager> settings);
+  RadarMqtt(std::unique_ptr<StreamCopy> copier, std::shared_ptr<SettingsManager> settings, EncodedAudioStream& to, URLStream& from, VolumeStream& volume);
 
   bool reconnect();
   void handle();

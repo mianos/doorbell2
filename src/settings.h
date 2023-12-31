@@ -9,6 +9,7 @@ struct SettingsManager {
     bool tracking = false;
     int detectionTimeout = 10000;
     String tz = "AEST-10AEDT,M10.1.0,M4.1.0/3";
+    int volume = 50;
 
     SettingsManager(); // Constructor declaration
 };

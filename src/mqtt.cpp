@@ -41,22 +41,23 @@ void RadarMqtt::callback(char* topic_str, byte* payload, unsigned int length) {
     if (dest == "reprovision") {
         Serial.printf("clearing provisioning\n");
         reset_provisioning();
+    } else if (dest == "volume") {
+      if (jpl.containsKey("level")) {
+        volume.setVolume(jpl["level"].as<float>());
+      }
     } else if (dest == "play") {
       if (jpl.containsKey("url")) {
         auto url = jpl["url"].as<String>();
-        Serial.printf("playing '%s'\n", url.c_str());
-        auto url_streamer = copier->getFrom();
-        auto urlStream = static_cast<URLStream*>(url_streamer);
-
-        urlStream->begin(url.c_str());
+        to.begin();
+        from.begin(url.c_str());
       }
     }
   }
 }
 
 
-RadarMqtt::RadarMqtt(std::unique_ptr<StreamCopy> copier, std::shared_ptr<SettingsManager> settings)
-    : settings(settings), client(espClient),  copier(std::move(copier)) {
+RadarMqtt::RadarMqtt(std::unique_ptr<StreamCopy> copier, std::shared_ptr<SettingsManager> settings, EncodedAudioStream& to, URLStream& from, VolumeStream& volume)
+    : settings(settings), client(espClient),  copier(std::move(copier)), to(to), from(from), volume(volume) {
   client.setServer(settings->mqttServer.c_str(), settings->mqttPort);
   Serial.printf("init mqtt, server '%s'\n", settings->mqttServer.c_str());
   client.setCallback([this](char* topic_str, byte* payload, unsigned int length) {
@@ -69,14 +70,14 @@ bool RadarMqtt::reconnect() {
   String clientId =  WiFi.getHostname(); // name + '-' + String(random(0xffff), HEX);
   Serial.printf("Attempting MQTT connection... to %s name %s\n", settings->mqttServer.c_str(), clientId.c_str());
   if (client.connect(clientId.c_str())) {
-    delay(2000);
+    delay(1000);
     String cmnd_topic = String("cmnd/") + settings->sensorName + "/#";
     client.subscribe(cmnd_topic.c_str());
     Serial.printf("mqtt connected\n");
 
     StaticJsonDocument<200> doc;
     doc["version"] = 1;
-//    doc["time"] = DateTime.toISOString();
+    doc["time"] = DateTime.toISOString();
     doc["hostname"] = WiFi.getHostname();
     doc["ip"] = WiFi.localIP().toString();
     String status_topic = "tele/" + settings->sensorName + "/init";
@@ -91,15 +92,51 @@ bool RadarMqtt::reconnect() {
   }
 }
 
+
+
+enum State {
+    NOT_COPYING,
+    COPYING,
+    WAITING_FOR_FLUSH
+} currentState = NOT_COPYING;
+
+// Variables to keep track of time
+unsigned long lastCopyTime = 0;
+const unsigned long flushDelay = 1000; // 1000 ms flush delay
+
+
 void RadarMqtt::handle() {
   if (!client.connected()) {
     if (!reconnect()) {
       return;
     }
   }
-  client.loop();
-  copier->copy();
+  client.loop();  // mqtt client loop
+  switch (currentState) {
+  case NOT_COPYING:
+      if (copier->available()) {
+          currentState = COPYING;
+      }
+      break;
+
+  case COPYING:
+      if (copier->available()) {
+          copier->copy();
+          lastCopyTime = millis(); // Update the last copy time
+      } else {
+          currentState = WAITING_FOR_FLUSH; // Transition to waiting for flush
+      }
+      break;
+
+  case WAITING_FOR_FLUSH:
+      if (millis() - lastCopyTime >= flushDelay) {
+          to.end(); // flush output
+          currentState = NOT_COPYING; // Transition back to not copying
+      }
+      break;
+  }
 }
+
 
 
 void RadarMqtt::mqtt_update_presence(bool entry, const Value *vv) {
