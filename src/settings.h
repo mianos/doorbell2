@@ -6,10 +6,10 @@ struct SettingsManager {
     String mqttServer = "mqtt2.mianos.com";
     int mqttPort = 1883;
     String sensorName = "doorbell2";
-    bool tracking = false;
+    int tracking = 0;
     int detectionTimeout = 10000;
     String tz = "AEST-10AEDT,M10.1.0,M4.1.0/3";
-    int volume = 50;
+    int volume = 100;
 
     SettingsManager(); // Constructor declaration
 };

@@ -11,8 +11,18 @@
 
 #include "mqtt.h"
 
+enum State {
+    NOT_COPYING,
+    COPYING,
+    WAITING_FOR_FLUSH
+} currentState = NOT_COPYING;
+
+
+unsigned long lastCopyTime = 0;
+const unsigned long flushDelay = 1000; // 1000 ms flush delay
+
+
 void RadarMqtt::callback(char* topic_str, byte* payload, unsigned int length) {
-  Serial.printf("in '%s'\n", topic_str);
   auto topic = String(topic_str);
   auto splitter = StringSplitter(topic, '/', 4);
   int itemCount = splitter.getItemCount();
@@ -20,7 +30,7 @@ void RadarMqtt::callback(char* topic_str, byte* payload, unsigned int length) {
     Serial.printf("Item count less than 3 %d '%s'\n", itemCount, topic_str);
     return;
   }
-#if 1
+#if 0
   for (int i = 0; i < itemCount; i++) {
     String item = splitter.getItemAtIndex(i);
     Serial.println("Item @ index " + String(i) + ": " + String(item));
@@ -41,15 +51,35 @@ void RadarMqtt::callback(char* topic_str, byte* payload, unsigned int length) {
     if (dest == "reprovision") {
         Serial.printf("clearing provisioning\n");
         reset_provisioning();
+
+    } else if (dest == "tracking") {
+      if (jpl.containsKey("time_ms")) {
+        settings->tracking = jpl["time_ms"].as<int>();
+      }
+    } else if (dest == "detectiontimeout") {
+      if (jpl.containsKey("time_ms")) {
+        settings->detectionTimeout = jpl["time_ms"].as<int>();
+      }
     } else if (dest == "volume") {
       if (jpl.containsKey("level")) {
-        volume.setVolume(jpl["level"].as<float>());
+        auto level = jpl["level"].as<int>();
+        volume.setVolume(level / 100);
+        settings->volume = level;
       }
     } else if (dest == "play") {
-      if (jpl.containsKey("url")) {
-        auto url = jpl["url"].as<String>();
-        to.begin();
-        from.begin(url.c_str());
+      if (currentState == NOT_COPYING) {
+        if (jpl.containsKey("url")) {
+          
+          prev_volume = volume.volume();
+          if (jpl.containsKey("volume")) {
+            volume.setVolume(jpl["volume"].as<float>() / 100);
+          }
+          auto url = jpl["url"].as<String>();
+          to.begin();
+          from.begin(url.c_str());
+        }
+      } else {
+        Serial.printf("already in progress, ignoring\n");
       }
     }
   }
@@ -92,19 +122,6 @@ bool RadarMqtt::reconnect() {
   }
 }
 
-
-
-enum State {
-    NOT_COPYING,
-    COPYING,
-    WAITING_FOR_FLUSH
-} currentState = NOT_COPYING;
-
-// Variables to keep track of time
-unsigned long lastCopyTime = 0;
-const unsigned long flushDelay = 1000; // 1000 ms flush delay
-
-
 void RadarMqtt::handle() {
   if (!client.connected()) {
     if (!reconnect()) {
@@ -118,20 +135,19 @@ void RadarMqtt::handle() {
           currentState = COPYING;
       }
       break;
-
   case COPYING:
       if (copier->available()) {
           copier->copy();
-          lastCopyTime = millis(); // Update the last copy time
+          lastCopyTime = millis();
       } else {
-          currentState = WAITING_FOR_FLUSH; // Transition to waiting for flush
+          currentState = WAITING_FOR_FLUSH;
       }
       break;
-
   case WAITING_FOR_FLUSH:
       if (millis() - lastCopyTime >= flushDelay) {
           to.end(); // flush output
-          currentState = NOT_COPYING; // Transition back to not copying
+          volume.setVolume(prev_volume);
+          currentState = NOT_COPYING;
       }
       break;
   }
@@ -149,7 +165,7 @@ void RadarMqtt::mqtt_update_presence(bool entry, const Value *vv) {
   String status_topic = "tele/" + settings->sensorName + "/presence";
   String output;
   serializeJson(doc, output);
-  Serial.printf("sending '%s' to '%s'\n", output.c_str(), status_topic.c_str());
+//  Serial.printf("sending '%s' to '%s'\n", output.c_str(), status_topic.c_str());
   client.publish(status_topic.c_str(), output.c_str());
 }
 
@@ -160,7 +176,7 @@ void RadarMqtt::mqtt_track(const Value *vv) {
   String status_topic = "tele/" + settings->sensorName + "/tracking";
   String output;
   serializeJson(doc, output);
-  Serial.printf("sending '%s' to '%s'\n", output.c_str(), status_topic.c_str());
+//  Serial.printf("sending '%s' to '%s'\n", output.c_str(), status_topic.c_str());
   client.publish(status_topic.c_str(), output.c_str());
 }
 

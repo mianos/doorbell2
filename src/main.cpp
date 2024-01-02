@@ -20,10 +20,8 @@ std::shared_ptr<RadarMqtt> mqtt;
 std::shared_ptr<SettingsManager> settings;
 RadarSensor *radarSensor;
 
-
 unsigned long lastInvokeTime = 0; // Store the last time you called the function
 const unsigned long dayMillis = 24UL * 60 * 60 * 1000; // Milliseconds in a day
-
 
 void setup() {
   Serial.begin(115200);
@@ -48,7 +46,7 @@ void setup() {
   volume.begin(cfg);
 
   settings = std::make_shared<SettingsManager>();
-  volume.setVolume(settings->volume * 100);
+  volume.setVolume(settings->volume / 100.0);
 
   DateTime.setTimeZone(settings->tz.c_str());
   DateTime.begin(/* timeout param */);

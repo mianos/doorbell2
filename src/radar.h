@@ -11,7 +11,6 @@ public:
     RadarSensor(EventProc* ep,  std::shared_ptr<SettingsManager> settings);
     virtual std::vector<std::unique_ptr<Value>> get_decoded_radar_data() = 0;
     void process(float minPower = 0.0);
-    bool tracking = false;
 
 protected:
     enum DetectionState {

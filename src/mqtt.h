@@ -16,6 +16,7 @@ struct RadarMqtt {
   EncodedAudioStream& to;
   URLStream& from;
   VolumeStream& volume;
+  float prev_volume = 1.0;
 
   unsigned long lastTimeCalled = 0;  // Store the last time the function was called
   const unsigned long interval = 250;  // Interval in milliseconds (1000 ms / 4 = 250 ms)
