@@ -6,9 +6,12 @@ bool getConfigOrDefault(DynamicJsonDocument& doc, const char* key, T& value) {
     T oldValue = value;
     if (doc.containsKey(key)) {
         value = doc[key].as<T>();
-    } else {
+    }
+#if 0
+    else {
         Serial.printf("%s not found in config. Using default.\n", key);
     }
+#endif
     return value != oldValue;
 }
 

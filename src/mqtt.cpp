@@ -53,11 +53,9 @@ void RadarMqtt::callback(char* topic_str, byte* payload, unsigned int length) {
         reset_provisioning();
 
     } else if (dest == "settings") {
-      settings->loadFromDocument(jpl);
       auto result = settings->loadFromDocument(jpl);
-
       if (std::find(result.begin(), result.end(), SettingsManager::SettingChange::VolumeChanged) != result.end()) {
-        Serial.printf("Setting volume as it is present\n");
+        Serial.printf("Setting VOLUME as it is present\n");
         volume.setVolume(settings->volume / 100);
       }
     } else if (dest == "play") {
