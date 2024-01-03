@@ -52,19 +52,13 @@ void RadarMqtt::callback(char* topic_str, byte* payload, unsigned int length) {
         Serial.printf("clearing provisioning\n");
         reset_provisioning();
 
-    } else if (dest == "tracking") {
-      if (jpl.containsKey("time_ms")) {
-        settings->tracking = jpl["time_ms"].as<int>();
-      }
-    } else if (dest == "detectiontimeout") {
-      if (jpl.containsKey("time_ms")) {
-        settings->detectionTimeout = jpl["time_ms"].as<int>();
-      }
-    } else if (dest == "volume") {
-      if (jpl.containsKey("level")) {
-        auto level = jpl["level"].as<int>();
-        volume.setVolume(level / 100);
-        settings->volume = level;
+    } else if (dest == "settings") {
+      settings->loadFromDocument(jpl);
+      auto result = settings->loadFromDocument(jpl);
+
+      if (std::find(result.begin(), result.end(), SettingsManager::SettingChange::VolumeChanged) != result.end()) {
+        Serial.printf("Setting volume as it is present\n");
+        volume.setVolume(settings->volume / 100);
       }
     } else if (dest == "play") {
       if (currentState == NOT_COPYING) {
