@@ -51,11 +51,12 @@ void RadarMqtt::callback(char* topic_str, byte* payload, unsigned int length) {
     if (dest == "reprovision") {
         Serial.printf("clearing provisioning\n");
         reset_provisioning();
-
+    } else if (dest == "restart") {
+        Serial.printf("rebooting\n");
+        ESP.restart();
     } else if (dest == "settings") {
       auto result = settings->loadFromDocument(jpl);
       if (std::find(result.begin(), result.end(), SettingsManager::SettingChange::VolumeChanged) != result.end()) {
-        Serial.printf("Setting VOLUME as it is present\n");
         volume.setVolume(settings->volume / 100);
       }
     } else if (dest == "play") {
@@ -98,7 +99,7 @@ bool RadarMqtt::reconnect() {
     Serial.printf("mqtt connected\n");
 
     StaticJsonDocument<200> doc;
-    doc["version"] = 1;
+    doc["version"] = 2;
     doc["time"] = DateTime.toISOString();
     doc["hostname"] = WiFi.getHostname();
     doc["ip"] = WiFi.localIP().toString();
