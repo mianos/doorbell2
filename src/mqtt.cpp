@@ -58,7 +58,9 @@ void RadarMqtt::callback(char* topic_str, byte* payload, unsigned int length) {
       auto result = settings->loadFromDocument(jpl);
       if (std::find(result.begin(), result.end(), SettingsManager::SettingChange::VolumeChanged) != result.end()) {
         volume.setVolume(settings->volume / 100);
+        prev_volume = volume.volume();  // if volume is set during a play, go back to the one set by settings.
       }
+      settings->printSettings();
     } else if (dest == "play") {
       if (currentState == NOT_COPYING) {
         if (jpl.containsKey("url")) {

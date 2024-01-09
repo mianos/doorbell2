@@ -46,6 +46,7 @@ std::vector<SettingsManager::SettingChange> SettingsManager::loadFromDocument(Dy
     getConfigOrDefault(doc, "mqtt_port", mqttPort);
     getConfigOrDefault(doc, "sensor_name", sensorName);
     getConfigOrDefault(doc, "tracking", tracking);
+    getConfigOrDefault(doc, "presence", presence);
     getConfigOrDefault(doc, "detection_timeout", detectionTimeout);
     getConfigOrDefault(doc, "tz", tz);
     return changes;
@@ -57,6 +58,7 @@ void SettingsManager::fillJsonDocument(DynamicJsonDocument& doc) {
     doc["mqtt_port"] = mqttPort;
     doc["sensor_name"] = sensorName;
     doc["tracking"] = tracking;
+    doc["presence"] = presence;
     doc["detection_timeout"] = detectionTimeout;
     doc["tz"] = tz;
     doc["volume"] = volume;
@@ -67,6 +69,7 @@ void SettingsManager::printSettings() {
     Serial.printf("MQTT Port: %d\n", mqttPort);
     Serial.printf("Sensor Name: %s\n", sensorName.c_str());
     Serial.printf("Tracking: %d\n", tracking);
+    Serial.printf("Presence: %d\n", presence);
     Serial.printf("Detection Timeout: %d\n", detectionTimeout);
     Serial.printf("Timezone: %s\n", tz.c_str());
     Serial.printf("Volume: %d\n", volume);

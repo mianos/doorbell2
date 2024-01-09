@@ -10,6 +10,7 @@ void RadarSensor::process(float minPower) {
 
     bool noTargetFound = true;
     for (auto &v : valuesList) {
+#if 0
         if (v->etype() == "no") {
             if (currentState == STATE_DETECTED || currentState == STATE_DETECTED_ONCE) {
                 ep->Cleared();
@@ -20,6 +21,7 @@ void RadarSensor::process(float minPower) {
                 return;
             }
         }
+#endif
         if (v->get_power() >= minPower) {
             noTargetFound = false;
             break;
@@ -65,6 +67,7 @@ void RadarSensor::process(float minPower) {
       for (auto& v : valuesList) {
         if (v->etype() != "no") {
           ep->TrackingUpdate(v.get());
+          ep->PresenceUpdate(v.get());
         }
       }
    }
