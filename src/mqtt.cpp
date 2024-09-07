@@ -123,6 +123,17 @@ void RadarMqtt::handle() {
       return;
     }
   }
+  
+  const unsigned long interval = 60000;     // 60 seconds
+  static unsigned long previousMillis = 0;  // Tracks last time update_status() was called
+
+  unsigned long currentMillis = millis();
+  
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;  // Update the timestamp
+    update_status();  // Call update_status() every 60 seconds
+  }
+
   client.loop();  // mqtt client loop
   switch (currentState) {
   case NOT_COPYING:
@@ -175,3 +186,30 @@ void RadarMqtt::mqtt_track(const Value *vv) {
   client.publish(status_topic.c_str(), output.c_str());
 }
 
+String getUptime() {
+  uint32_t millisecs = millis();
+  uint32_t seconds = millisecs / 1000;
+  uint32_t minutes = seconds / 60;
+  uint32_t hours = minutes / 60;
+  
+  seconds %= 60;
+  minutes %= 60;
+  
+  return String(hours) + "h " + String(minutes) + "m " + String(seconds) + "s";
+}
+
+void RadarMqtt::update_status() {
+  StaticJsonDocument<300> doc;
+
+  // Include uptime and memory information
+  doc["uptime"] = getUptime();
+  doc["heap_used"] = ESP.getHeapSize() - ESP.getFreeHeap();
+  doc["heap_free"] = ESP.getFreeHeap();
+
+  String status_topic = "tele/" + settings->sensorName + "/status";
+  String output;
+  serializeJson(doc, output);
+
+  // Publish the JSON to the MQTT broker
+  client.publish(status_topic.c_str(), output.c_str());
+}
