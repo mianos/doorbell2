@@ -186,22 +186,25 @@ void RadarMqtt::mqtt_track(const Value *vv) {
   client.publish(status_topic.c_str(), output.c_str());
 }
 
+
 String getUptime() {
   uint32_t millisecs = millis();
   uint32_t seconds = millisecs / 1000;
   uint32_t minutes = seconds / 60;
   uint32_t hours = minutes / 60;
-  
-  seconds %= 60;
-  minutes %= 60;
-  
-  return String(hours) + "h " + String(minutes) + "m " + String(seconds) + "s";
+  uint32_t days = hours / 24;
+
+  hours %= 24;  // Only show the hours within a single day
+  minutes %= 60;  // Only show the minutes within an hour
+
+  return String(days) + "d " + String(hours) + "h " + String(minutes) + "m";
 }
 
 void RadarMqtt::update_status() {
   StaticJsonDocument<300> doc;
 
   // Include uptime and memory information
+  doc["time"] = DateTime.toISOString();
   doc["uptime"] = getUptime();
   doc["heap_used"] = ESP.getHeapSize() - ESP.getFreeHeap();
   doc["heap_free"] = ESP.getFreeHeap();
