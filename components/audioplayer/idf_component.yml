@@ -1,0 +1,4 @@
+version: "0.0.1"
+description: "Streaming MP3-over-HTTP player: queue + task + I2S output (Helix decoder)"
+dependencies:
+  chmorgan/esp-libhelix-mp3: "^1.0.3"
