@@ -1,6 +1,7 @@
+#include <algorithm>
 #include <cstring>
 #include <string>
-#include <memory>
+#include <utility>
 
 #include "esp_log.h"
 
@@ -10,8 +11,6 @@ static const char* TAG = "MqttClient";
 
 MqttClient::MqttClient(esp_mqtt_client_config_t& mqtt_cfg, std::string sensorName)
         : sensorName(sensorName) {
-    connected_sem = xSemaphoreCreateBinary();
-
     client = esp_mqtt_client_init(&mqtt_cfg);
     esp_mqtt_client_register_event(client,
 								static_cast<esp_mqtt_event_id_t>(ESP_EVENT_ANY_ID),
@@ -28,22 +27,28 @@ void MqttClient::start() {
     esp_mqtt_client_start(client);
 }
 
-void MqttClient::publish(std::string topic, std::string data) {
-    if (xSemaphoreTake(connected_sem, 0) == pdTRUE) {
-        esp_mqtt_client_publish(client, topic.c_str(), data.c_str(), 0, 1, 0);
-        xSemaphoreGive(connected_sem);
-		// ESP_LOGI(TAG, "published %s data %s", topic.c_str(), data.c_str());
+void MqttClient::publish(std::string topic, std::string data, int qos) {
+    // esp_mqtt_client_publish is internally thread-safe, so concurrent callers
+    // (PID timer, sensor loop, main task) don't need external locking here.
+    if (connected_.load()) {
+        esp_mqtt_client_publish(client, topic.c_str(), data.c_str(), 0, qos, 0);
     } else {
-        messageQueue.emplace_back(std::make_pair(topic, data));
-	}
+        std::lock_guard<std::mutex> lock(queueMutex_);
+        if (messageQueue.size() >= kMaxQueued) {
+            messageQueue.pop_front();  // drop oldest; telemetry favours fresh data
+        }
+        messageQueue.emplace_back(std::move(topic), std::move(data));
+    }
 }
 
-
 void MqttClient::flushMessageQueue() {
+    std::lock_guard<std::mutex> lock(queueMutex_);
     while (!messageQueue.empty()) {
         const auto& msg = messageQueue.front();
-        esp_mqtt_client_publish(client, msg.first.c_str(), msg.second.c_str(), 0, 1, 0);
-        messageQueue.pop_front();  // Remove the message from the queue after publishing
+        // Flush buffered messages at QoS 0 — they are already stale, so there is
+        // no value in retransmitting them.
+        esp_mqtt_client_publish(client, msg.first.c_str(), msg.second.c_str(), 0, 0, 0);
+        messageQueue.pop_front();
     }
 }
 
@@ -52,10 +57,10 @@ void MqttClient::subscribe(std::string topic) {
     if (std::find(subscriptions.begin(), subscriptions.end(), topic) == subscriptions.end()) {
         subscriptions.push_back(topic);  // Add to subscriptions if not already present
     }
-    // Perform subscription only if already connected
-    if (xSemaphoreTake(connected_sem, 0) == pdTRUE) {  // Non-blocking take
+    // Perform subscription immediately only if already connected; otherwise it
+    // happens in resubscribe() on the next connect.
+    if (connected_.load()) {
         esp_mqtt_client_subscribe(client, topic.c_str(), 0);
-        xSemaphoreGive(connected_sem);  // Release the semaphore immediately after checking
     }
 }
 
@@ -95,12 +100,13 @@ void MqttClient::mqtt_event_handler(void* handler_args, esp_event_base_t base, i
     switch (event->event_id) {
     case MQTT_EVENT_CONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
-        xSemaphoreGive(clientInstance->connected_sem);
+        clientInstance->connected_.store(true);
         clientInstance->resubscribe();
 		clientInstance->flushMessageQueue();
         break;
     case MQTT_EVENT_DISCONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
+        clientInstance->connected_.store(false);
         break;
     case MQTT_EVENT_SUBSCRIBED:
         ESP_LOGI(TAG, "MQTT_EVENT_SUBSCRIBED, msg_id=%d", event->msg_id);
@@ -136,9 +142,8 @@ void MqttClient::mqtt_event_handler(void* handler_args, esp_event_base_t base, i
 }
 
 void MqttClient::wait_for_connection() {
-    if (xSemaphoreTake(connected_sem, portMAX_DELAY)) {
-        ESP_LOGI(TAG, "Connected, semaphore released");
-    } else {
-        ESP_LOGE(TAG, "Something went wrong with semaphore");
+    while (!connected_.load()) {
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
+    ESP_LOGI(TAG, "Connected");
 }
