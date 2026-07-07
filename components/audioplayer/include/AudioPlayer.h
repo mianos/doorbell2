@@ -6,6 +6,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "freertos/stream_buffer.h"
+#include "freertos/semphr.h"
 #include "driver/gpio.h"
 #include "driver/i2s_std.h"
 
@@ -16,6 +18,11 @@
 // pushed onto a bounded FreeRTOS queue and consumed by a single dedicated task,
 // one after another. enqueue() never blocks the caller (MQTT/radar contexts);
 // nothing is dropped except on queue overflow (logged).
+//
+// Per clip, a short-lived reader task streams HTTP into a stream buffer while
+// the audio task decodes from it, so Wi-Fi stalls are absorbed by buffered
+// compressed data (plus the I2S DMA cushion) instead of reaching the speaker.
+// Playback starts only after prebuffer_bytes (or the whole clip) has arrived.
 struct AudioPlayerConfig {
     // XIAO ESP32-C3 defaults: D2=GPIO4 (data), D1=GPIO3 (bclk), D0=GPIO2 (ws).
     gpio_num_t bclk = GPIO_NUM_3;
@@ -28,6 +35,12 @@ struct AudioPlayerConfig {
     int      task_priority       = 5;      // below Wi-Fi/lwIP
     int      task_stack          = 6144;
     int      http_timeout_ms     = 8000;
+
+    // Compressed-audio jitter buffer between the HTTP reader and the decoder.
+    // 32 KB ~= 2 s at 128 kbps; prebuffer trades ~that much start latency for
+    // immunity to Wi-Fi stalls shorter than the buffered span.
+    int      stream_buf_size     = 32768;
+    int      prebuffer_bytes     = 16384;
 };
 
 class AudioPlayer {
@@ -53,15 +66,20 @@ private:
         int16_t volume;  // 0..100, or -1 for default
     };
 
+    struct ReaderCtx;
+
     static void taskTrampoline(void* arg);
+    static void readerTask(void* arg);
     void run();
     void playOne(const PlayRequest& req);
     bool ensureSampleRate(uint32_t hz);
 
-    AudioPlayerConfig cfg_;
-    QueueHandle_t     queue_ = nullptr;
-    TaskHandle_t      task_  = nullptr;
-    i2s_chan_handle_t tx_    = nullptr;
-    uint32_t          cur_rate_ = 0;
-    std::atomic<int>  default_volume_;
+    AudioPlayerConfig   cfg_;
+    QueueHandle_t       queue_ = nullptr;
+    TaskHandle_t        task_  = nullptr;
+    i2s_chan_handle_t   tx_    = nullptr;
+    StreamBufferHandle_t sbuf_ = nullptr;
+    SemaphoreHandle_t   reader_exited_ = nullptr;
+    uint32_t            cur_rate_ = 0;
+    std::atomic<int>    default_volume_;
 };

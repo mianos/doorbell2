@@ -17,9 +17,11 @@
 #include "esp_system.h"
 #include "esp_timer.h"
 #include "esp_ota_ops.h"
+#include "esp_app_desc.h"
 #include "esp_event.h"
 #include "esp_netif.h"
 #include "esp_netif_sntp.h"
+#include "esp_wifi.h"
 
 #include "NvsStorageManager.h"
 #include "WifiManager.h"
@@ -188,8 +190,13 @@ void telemetryTask(void* arg) {
         vTaskDelay(pdMS_TO_TICKS(500));
     }
 
+    // Build identity from the app descriptor embedded in the image (version is
+    // git describe, e.g. "9bbad4c-dirty"), so a deploy is verifiable from MQTT.
+    const esp_app_desc_t* desc = esp_app_get_description();
     JsonWrapper init;
     init.AddItem("version", 3);
+    init.AddItem("build", std::string(desc->version));
+    init.AddItem("built", std::string(desc->date) + " " + std::string(desc->time));
     init.AddTime();
     init.AddItem("hostname", app->settings->sensorName);
     init.AddItem("ip", localIp());
@@ -222,6 +229,11 @@ extern "C" void app_main(void) {
     static WiFiManager wifi(nvs, onGotIp, nullptr);
     std::string host = settings.sensorName;
     wifi.configSetHostName(host);
+
+    // Modem power save (the IDF default) sleeps the radio between DTIM beacons,
+    // stalling HTTP for 100-300 ms at a time — audible as chopped audio. This
+    // device is mains-powered, so keep the radio awake.
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
 
     // NTP time in the configured timezone.
     setenv("TZ", settings.tz.c_str(), 1);

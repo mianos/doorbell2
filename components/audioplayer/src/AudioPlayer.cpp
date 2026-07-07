@@ -10,10 +10,11 @@
 static const char* TAG = "audio";
 
 // Helix layer-3 produces at most 1152 samples/channel/frame; stereo => 2304.
-static constexpr int  kMaxSamples = 2 * 1152;     // decoded interleaved int16
-static constexpr int  kMaxStereo  = 2 * 1152;     // duplicated/clamped output
-static constexpr int  kInBufSize  = 4096;         // > 2x max MP3 frame (1441 B)
-static constexpr int  kHttpChunk  = 1024;
+static constexpr int  kMaxSamples   = 2 * 1152;   // decoded interleaved int16
+static constexpr int  kMaxStereo    = 2 * 1152;   // duplicated/clamped output
+static constexpr int  kInBufSize    = 4096;       // > 2x max MP3 frame
+static constexpr int  kMaxFrameBytes = 1441;      // largest possible MP3 frame
+static constexpr int  kHttpChunk    = 1024;
 
 AudioPlayer::AudioPlayer(const AudioPlayerConfig& cfg)
     : cfg_(cfg), default_volume_(cfg.default_volume) {}
@@ -25,6 +26,8 @@ AudioPlayer::~AudioPlayer() {
         i2s_del_channel(tx_);
     }
     if (queue_) vQueueDelete(queue_);
+    if (sbuf_) vStreamBufferDelete(sbuf_);
+    if (reader_exited_) vSemaphoreDelete(reader_exited_);
 }
 
 void AudioPlayer::setDefaultVolume(int volume) {
@@ -34,8 +37,8 @@ void AudioPlayer::setDefaultVolume(int volume) {
 void AudioPlayer::start() {
     // --- I2S TX channel ---
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
-    chan_cfg.dma_desc_num  = 6;
-    chan_cfg.dma_frame_num = 240;     // ~60 ms buffered at 24 kHz
+    chan_cfg.dma_desc_num  = 8;
+    chan_cfg.dma_frame_num = 480;     // 8x480 frames: ~160 ms at 24 kHz, ~87 ms at 44.1 kHz
     chan_cfg.auto_clear    = true;    // zero-fill on underrun (avoid DC buzz)
     ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &tx_, nullptr));
 
@@ -55,6 +58,12 @@ void AudioPlayer::start() {
     ESP_ERROR_CHECK(i2s_channel_init_std_mode(tx_, &std_cfg));
     ESP_ERROR_CHECK(i2s_channel_enable(tx_));
     cur_rate_ = cfg_.initial_sample_rate;
+
+    // --- compressed-audio jitter buffer (reader task -> decoder) ---
+    sbuf_ = xStreamBufferCreate(cfg_.stream_buf_size, 1);
+    configASSERT(sbuf_);
+    reader_exited_ = xSemaphoreCreateBinary();
+    configASSERT(reader_exited_);
 
     // --- queue + consumer task ---
     queue_ = xQueueCreate(cfg_.queue_depth, sizeof(PlayRequest));
@@ -96,6 +105,37 @@ void AudioPlayer::taskTrampoline(void* arg) {
     static_cast<AudioPlayer*>(arg)->run();
 }
 
+// Shared between playOne (decoder side) and the per-clip reader task. Lives on
+// playOne's stack; playOne joins the reader (reader_exited_) before returning.
+struct AudioPlayer::ReaderCtx {
+    esp_http_client_handle_t http;
+    StreamBufferHandle_t     sbuf;
+    SemaphoreHandle_t        exited;
+    std::atomic<bool>        abort{false};
+    std::atomic<bool>        done{false};
+};
+
+// Streams the HTTP body into the jitter buffer until EOF, error, or abort.
+// The decoder paces it: xStreamBufferSend blocks (bounded) when the buffer is
+// full, so at most stream_buf_size of the clip is held in RAM at once.
+void AudioPlayer::readerTask(void* arg) {
+    auto* c = static_cast<ReaderCtx*>(arg);
+    uint8_t chunk[kHttpChunk];
+    while (!c->abort.load()) {
+        int n = esp_http_client_read(c->http, (char*)chunk, sizeof(chunk));
+        if (n < 0) { ESP_LOGE(TAG, "http read error"); break; }
+        if (n == 0) break;  // EOF
+        int off = 0;
+        while (off < n && !c->abort.load()) {
+            off += (int)xStreamBufferSend(c->sbuf, chunk + off, (size_t)(n - off),
+                                          pdMS_TO_TICKS(100));
+        }
+    }
+    c->done.store(true);
+    xSemaphoreGive(c->exited);
+    vTaskDelete(nullptr);
+}
+
 void AudioPlayer::run() {
     PlayRequest req;
     for (;;) {
@@ -120,7 +160,9 @@ void AudioPlayer::playOne(const PlayRequest& req) {
     if (!http) { ESP_LOGE(TAG, "http init failed"); return; }
 
     bool ok = false;
+    bool reader_started = false;
     HMP3Decoder dec = nullptr;
+    ReaderCtx rctx;
     // Heap buffers (kept off the task stack).
     uint8_t*  inbuf = (uint8_t*)malloc(kInBufSize);
     short*    pcm   = (short*)malloc(kMaxSamples * sizeof(short));
@@ -140,6 +182,26 @@ void AudioPlayer::playOne(const PlayRequest& req) {
     dec = MP3InitDecoder();
     if (!dec) { ESP_LOGE(TAG, "MP3InitDecoder failed"); goto cleanup; }
 
+    // Hand the connection to the reader task; from here the decoder consumes
+    // only from sbuf_ and touches http again only after joining the reader.
+    xStreamBufferReset(sbuf_);
+    rctx.http   = http;
+    rctx.sbuf   = sbuf_;
+    rctx.exited = reader_exited_;
+    if (xTaskCreate(readerTask, "audio_rd", 4096, &rctx, cfg_.task_priority, nullptr) != pdPASS) {
+        ESP_LOGE(TAG, "reader task create failed");
+        goto cleanup;
+    }
+    reader_started = true;
+
+    // Prebuffer so Wi-Fi jitter is absorbed up front, not mid-clip. Clamped to
+    // the buffer size: a full buffer must satisfy the wait or it never ends.
+    while ((int)xStreamBufferBytesAvailable(sbuf_) <
+               std::min(cfg_.prebuffer_bytes, cfg_.stream_buf_size) &&
+           !rctx.done.load()) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
     {
         int      fill = 0;                 // valid bytes in inbuf
         uint8_t* read = inbuf;             // current decode pointer within inbuf
@@ -147,15 +209,21 @@ void AudioPlayer::playOne(const PlayRequest& req) {
         size_t   bytes_no_frame = 0;       // junk guard
 
         for (;;) {
-            // Compact remaining bytes to the front, then refill from HTTP.
+            // Compact remaining bytes to the front, then top up from the
+            // jitter buffer: grab whatever is there without blocking, and
+            // block only when we lack a full frame's worth. A Wi-Fi stall
+            // therefore never prevents decoding data already buffered.
             if (read != inbuf && fill > 0) memmove(inbuf, read, fill);
             read = inbuf;
 
             while (fill < kInBufSize && !eof) {
-                int n = esp_http_client_read(http, (char*)inbuf + fill, kInBufSize - fill);
-                if (n > 0)      fill += n;
-                else if (n == 0) { eof = true; }
-                else { ESP_LOGE(TAG, "http read error"); eof = true; }
+                TickType_t wait = (fill >= kMaxFrameBytes) ? 0 : pdMS_TO_TICKS(50);
+                size_t got = xStreamBufferReceive(sbuf_, inbuf + fill,
+                                                  (size_t)(kInBufSize - fill), wait);
+                if (got > 0) { fill += (int)got; continue; }
+                if (rctx.done.load() && xStreamBufferIsEmpty(sbuf_)) eof = true;
+                else if (fill >= kMaxFrameBytes) break;  // decode what we have
+                // else starved mid-clip: keep waiting for the reader
             }
             if (fill == 0) break;  // nothing left
 
@@ -172,7 +240,7 @@ void AudioPlayer::playOne(const PlayRequest& req) {
             fill -= offset;
 
             // Need a whole frame's worth before decoding; if short and not EOF, refill.
-            if (fill < 1441 && !eof) {
+            if (fill < kMaxFrameBytes && !eof) {
                 if (read != inbuf) memmove(inbuf, read, fill);
                 read = inbuf;
                 continue;
@@ -210,6 +278,12 @@ void AudioPlayer::playOne(const PlayRequest& req) {
     }
 
 cleanup:
+    if (reader_started) {
+        // Join the reader before closing http (it owns the connection until it
+        // exits). Bounded: send blocks <=100 ms per round, read <= http timeout.
+        rctx.abort.store(true);
+        xSemaphoreTake(reader_exited_, portMAX_DELAY);
+    }
     if (dec)   MP3FreeDecoder(dec);
     esp_http_client_close(http);
     esp_http_client_cleanup(http);
