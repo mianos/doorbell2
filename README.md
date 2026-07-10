@@ -23,8 +23,8 @@ task fed by a bounded queue, fully decoupled from MQTT and radar.
 | | ESP TX (radar RX) | D6 | 21 |
 
 Radar UART is `UART_NUM_1` @ 256000 8N1. Pins are defaults in
-`AudioPlayerConfig` ([components/audioplayer/include/AudioPlayer.h](components/audioplayer/include/AudioPlayer.h))
-and the `Ld2450` constructor ([components/radar/include/Ld2450.h](components/radar/include/Ld2450.h)).
+`AudioPlayerConfig` (mianesp `audioplayer`) and the `Ld2450` constructor
+([components/radar/include/Ld2450.h](components/radar/include/Ld2450.h)).
 
 ## Build / flash
 
@@ -35,8 +35,10 @@ idf.py build
 idf.py -p /dev/tty.usbmodemXXXX flash monitor
 ```
 
-First build fetches managed components: `chmorgan/esp-libhelix-mp3` (Helix
-fixed-point MP3 decoder), `espressif/mqtt`, `espressif/cjson`,
+First build fetches managed components: the shared
+[mianesp](https://github.com/mianos/mianesp) components (see
+`main/idf_component.yml`) plus `chmorgan/esp-libhelix-mp3` (Helix fixed-point
+MP3 decoder), `espressif/mqtt`, `espressif/cjson`,
 `espressif/network_provisioning`.
 
 `build.sh` is a convenience wrapper that sources IDF and builds.
@@ -101,6 +103,7 @@ Commands in — `cmnd/<name>/<cmd>` (payload must be non-empty JSON):
 | Command | Payload | Effect |
 |---|---|---|
 | `play` | `{"url":"http://.../x.mp3","volume":80}` | Queue a chime (volume 0–100 optional) |
+| `say` | `{"text":"hello","voice":"af_heart","volume":80}` | Speak via the FastKoko TTS server (`tts_url`); voice/volume optional. Also `POST /say` |
 | `settings` | any subset of the settings keys below | Update + persist settings |
 | `restart` | `{"x":1}` | `esp_restart()` |
 | `reprovision` | `{"x":1}` | Clear Wi-Fi creds + reboot |
@@ -115,7 +118,8 @@ Telemetry out — `tele/<name>/...`:
 ## Settings (stored as JSON in NVS, defaults in [Settings.h](components/appsettings/include/Settings.h))
 
 `mqtt_server`, `mqtt_port`, `sensor_name`, `tracking`, `presence`,
-`detection_timeout`, `tz`, `volume`. Missing/garbage config falls back to defaults.
+`detection_timeout`, `tz`, `volume`, `tts_url`, `tts_voice`. Missing/garbage
+config falls back to defaults.
 
 ## Tests
 
@@ -127,6 +131,7 @@ bash test/host/run.sh
 
 ## Components
 
-Reused (copied in): `wifimanager`, `webserver`, `jsonwrapper`, `nvsstoragemanager`
-(from mianesp), `mqttwrapper` (from stillerate2). New: `audioplayer`,
-`appsettings`, `radar`.
+Shared components (`wifimanager`, `webserver`, `jsonwrapper`,
+`nvsstoragemanager`, `mqttwrapper`, `audioplayer`) are pulled from
+[mianesp](https://github.com/mianos/mianesp) by the component manager.
+App-local: `appsettings`, `radar`.

@@ -1,9 +1,10 @@
 // doorbell3 — ESP-IDF port of the doorbell2 Arduino app.
 //
-// Plays MP3 chimes (queued, never dropped) on MQTT command, reports LD2450
-// radar presence/tracking over MQTT, persists settings in NVS, exposes a health
-// endpoint, and keeps NTP time. Audio runs in its own task so a chime can never
-// block the doorbell.
+// Plays MP3 chimes (queued, never dropped) on MQTT command, speaks text via a
+// FastKoko (Kokoro-FastAPI) TTS server (MQTT "say" or POST /say), reports
+// LD2450 radar presence/tracking over MQTT, persists settings in NVS, exposes
+// a health endpoint, and keeps NTP time. Audio runs in its own task so a
+// chime can never block the doorbell.
 
 #include <string>
 #include <regex>
@@ -34,6 +35,7 @@
 #include "Ld2450.h"
 #include "LocalEP.h"
 #include "RadarPublisher.h"
+#include "TtsRequest.h"
 
 static const char* TAG = "doorbell3";
 
@@ -91,7 +93,33 @@ private:
     Settings&   settings_;
 };
 
+// Queue a TTS request for `text` against the configured FastKoko server.
+// Fail-fast: refuses (and logs) when tts_url is blanked.
+bool say(App* app, const std::string& text, const std::string& voice, int volume) {
+    if (app->settings->ttsUrl.empty()) {
+        ESP_LOGE(TAG, "say: tts_url not configured (set it via cmnd settings or POST /config)");
+        return false;
+    }
+    const std::string& v = voice.empty() ? app->settings->ttsVoice : voice;
+    return app->player->enqueue(app->settings->ttsUrl, tts::requestBody(text, v), volume);
+}
+
 // ---- MQTT command handlers (cmnd/<name>/<cmd>) ----
+
+esp_err_t handleSay(MqttClient*, const std::string&, const JsonWrapper& d, void* ctx) {
+    auto* app = static_cast<App*>(ctx);
+    std::string text;
+    if (!d.GetField("text", text) || text.empty()) {
+        ESP_LOGW(TAG, "say command without text");
+        return ESP_OK;
+    }
+    std::string voice;
+    d.GetField("voice", voice);
+    int volume = -1;
+    d.GetField("volume", volume);
+    say(app, text, voice, volume);
+    return ESP_OK;
+}
 
 esp_err_t handlePlay(MqttClient*, const std::string&, const JsonWrapper& d, void* ctx) {
     auto* app = static_cast<App*>(ctx);
@@ -262,14 +290,15 @@ extern "C" void app_main(void) {
     static App app{ &settings, &player, &mqtt, &wifi };
 
     const std::string b = "cmnd/" + settings.sensorName + "/";
+    mqtt.registerHandler(b + "say",         std::regex(b + "say"),         handleSay,         &app);
     mqtt.registerHandler(b + "play",        std::regex(b + "play"),        handlePlay,        &app);
     mqtt.registerHandler(b + "settings",    std::regex(b + "settings"),    handleSettings,    &app);
     mqtt.registerHandler(b + "restart",     std::regex(b + "restart"),     handleRestart,     &app);
     mqtt.registerHandler(b + "reprovision", std::regex(b + "reprovision"), handleReprovision, &app);
     mqtt.start();
 
-    // Web server: base /healthz, /reset, /set_hostname plus OTA (/firmware) and
-    // /config, /config/reset.
+    // Web server: base /healthz, /reset, /set_hostname plus OTA (/firmware),
+    // /config, /config/reset and /say.
     static WebContext webctx(&wifi);
     static DoorbellWebServer web(&webctx, settings, player);
     web.start();

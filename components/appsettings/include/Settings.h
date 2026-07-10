@@ -19,6 +19,11 @@ public:
     int         detectionTimeout = 60000;    // ms of no motion before "cleared"
     std::string tz               = "AEST-10AEDT,M10.1.0,M4.1.0/3";
     int         volume           = 100;      // 0..100
+    // FastKoko (Kokoro-FastAPI) OpenAI-compatible speech endpoint for the
+    // "say" command; defaults to the house server (same trust model as the
+    // default mqttServer). say refuses (and logs) if it is blanked.
+    std::string ttsUrl   = "http://docker-host.mianos.com:8880/v1/audio/speech";
+    std::string ttsVoice = "af_heart";
 
     enum class Change { VolumeChanged };
 

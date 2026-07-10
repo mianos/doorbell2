@@ -1,0 +1,31 @@
+dependencies:
+  # Shared infrastructure — mianesp repo, main branch (same pattern as
+  # atomecho / ldr3 / mqttradar / stillerate2). appsettings and radar are
+  # app-specific and stay local.
+  jsonwrapper:
+    git: git@github.com:mianos/mianesp.git
+    path: components/jsonwrapper
+    version: main
+  nvsstoragemanager:
+    git: git@github.com:mianos/mianesp.git
+    path: components/nvsstoragemanager
+    version: main
+  wifimanager:
+    git: git@github.com:mianos/mianesp.git
+    path: components/wifimanager
+    version: main
+  webserver:
+    git: git@github.com:mianos/mianesp.git
+    path: components/webserver
+    version: main
+  mqttwrapper:
+    git: git@github.com:mianos/mianesp.git
+    path: components/mqttwrapper
+    version: main
+  audioplayer:
+    git: git@github.com:mianos/mianesp.git
+    path: components/audioplayer
+    version: main
+
+  # main.cpp configures esp_mqtt_client directly (not just via mqttwrapper).
+  espressif/mqtt: "*"

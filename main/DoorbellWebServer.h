@@ -16,6 +16,7 @@ class AudioPlayer;
 //   GET  /config         current settings as JSON
 //   POST /config         apply + persist a subset of settings
 //   POST /config/reset   restore settings to defaults (optional wifi wipe)
+//   POST /say            speak text via the configured FastKoko TTS server
 // Handlers recover this instance from req->user_ctx.
 class DoorbellWebServer : public WebServer {
 public:
@@ -32,6 +33,7 @@ private:
     static esp_err_t config_get_handler(httpd_req_t* req);
     static esp_err_t config_post_handler(httpd_req_t* req);
     static esp_err_t config_reset_post_handler(httpd_req_t* req);
+    static esp_err_t say_post_handler(httpd_req_t* req);
 
     Settings&    settings_;
     AudioPlayer& player_;

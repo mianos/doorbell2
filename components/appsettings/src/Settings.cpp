@@ -33,6 +33,8 @@ std::vector<Settings::Change> Settings::loadFromJson(const JsonWrapper& doc) {
     doc.GetField("presence", presence);
     doc.GetField("detection_timeout", detectionTimeout);
     doc.GetField("tz", tz);
+    doc.GetField("tts_url", ttsUrl);
+    doc.GetField("tts_voice", ttsVoice);
     return changes;
 }
 
@@ -46,6 +48,8 @@ JsonWrapper Settings::toJson() const {
     d.AddItem("detection_timeout", detectionTimeout);
     d.AddItem("tz", tz);
     d.AddItem("volume", volume);
+    d.AddItem("tts_url", ttsUrl);
+    d.AddItem("tts_voice", ttsVoice);
     return d;
 }
 
@@ -68,10 +72,13 @@ void Settings::resetToDefaults() {
     detectionTimeout = defaults.detectionTimeout;
     tz               = defaults.tz;
     volume           = defaults.volume;
+    ttsUrl           = defaults.ttsUrl;
+    ttsVoice         = defaults.ttsVoice;
 }
 
 void Settings::log() const {
-    ESP_LOGI(TAG, "mqtt=%s:%d name=%s tracking=%d presence=%d timeout=%d vol=%d tz=%s",
+    ESP_LOGI(TAG, "mqtt=%s:%d name=%s tracking=%d presence=%d timeout=%d vol=%d tz=%s tts_url=%s tts_voice=%s",
              mqttServer.c_str(), mqttPort, sensorName.c_str(), tracking, presence,
-             detectionTimeout, volume, tz.c_str());
+             detectionTimeout, volume, tz.c_str(),
+             ttsUrl.empty() ? "(unset)" : ttsUrl.c_str(), ttsVoice.c_str());
 }
