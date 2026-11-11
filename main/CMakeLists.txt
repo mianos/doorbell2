@@ -9,7 +9,7 @@ idf_component_register(SRCS "main.cpp" "DoorbellWebServer.cpp"
                          appsettings
                          audioplayer
                          mqttwrapper
-                         webserver
+                         webserver wifiwebserver
                          radar
                          jsonwrapper
                          espressif__mqtt

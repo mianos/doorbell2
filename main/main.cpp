@@ -29,7 +29,7 @@
 #include "Settings.h"
 #include "AudioPlayer.h"
 #include "MqttClient.h"
-#include "WebServer.h"
+#include "WifiWebServer.h"
 #include "DoorbellWebServer.h"
 #include "JsonWrapper.h"
 #include "Ld2450.h"
@@ -299,7 +299,7 @@ extern "C" void app_main(void) {
 
     // Web server: base /healthz, /reset, /set_hostname plus OTA (/firmware),
     // /config, /config/reset and /say.
-    static WebContext webctx(&wifi);
+    static WifiWebContext webctx(&wifi);
     static DoorbellWebServer web(&webctx, settings, player);
     web.start();
 

@@ -4,7 +4,7 @@
 #include "esp_http_server.h"
 
 #include "JsonWrapper.h"
-#include "WebServer.h"
+#include "WifiWebServer.h"
 
 class Settings;
 class AudioPlayer;
@@ -18,9 +18,9 @@ class AudioPlayer;
 //   POST /config/reset   restore settings to defaults (optional wifi wipe)
 //   POST /say            speak text via the configured FastKoko TTS server
 // Handlers recover this instance from req->user_ctx.
-class DoorbellWebServer : public WebServer {
+class DoorbellWebServer : public WifiWebServer {
 public:
-    DoorbellWebServer(WebContext* ctx, Settings& settings, AudioPlayer& player);
+    DoorbellWebServer(WifiWebContext* ctx, Settings& settings, AudioPlayer& player);
 
     esp_err_t start() override;
 

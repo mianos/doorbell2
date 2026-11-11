@@ -49,8 +49,8 @@ esp_err_t send_json(httpd_req_t* req, const JsonWrapper& json) {
 
 }  // namespace
 
-DoorbellWebServer::DoorbellWebServer(WebContext* ctx, Settings& settings, AudioPlayer& player)
-    : WebServer(ctx), settings_(settings), player_(player) {}
+DoorbellWebServer::DoorbellWebServer(WifiWebContext* ctx, Settings& settings, AudioPlayer& player)
+    : WifiWebServer(ctx), settings_(settings), player_(player) {}
 
 esp_err_t DoorbellWebServer::start() {
     esp_err_t r = WebServer::start();
@@ -222,10 +222,10 @@ esp_err_t DoorbellWebServer::config_reset_post_handler(httpd_req_t* req) {
     if (wipe_wifi) {
         // WiFiManager::clear() blanks the saved STA credentials and restarts;
         // the device comes back up unprovisioned for ESP-Touch v2.
-        if (self->webContext && self->webContext->wifiManager) {
+        if (self->webContext && static_cast<WifiWebContext*>(self->webContext)->wifiManager) {
             ESP_LOGW(TAG, "clearing wifi credentials and rebooting");
             vTaskDelay(pdMS_TO_TICKS(500));
-            self->webContext->wifiManager->clear();
+            static_cast<WifiWebContext*>(self->webContext)->wifiManager->clear();
         }
     }
     return r;
